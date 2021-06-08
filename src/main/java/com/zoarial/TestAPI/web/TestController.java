@@ -186,10 +186,13 @@ public class TestController {
 
         for(int i = 0; i < numberOfActions; i++) {
             JSONObject action = new JSONObject();
-            action.put("uuid", socketHelper.readUUID());
+            action.put("UUID", socketHelper.readUUID());
+            action.put("nodeUUID", socketHelper.readUUID());
             action.put("name", socketHelper.readString());
-            action.put("security_level", socketHelper.readByte());
+            action.put("securityLevel", socketHelper.readByte());
             action.put("args", socketHelper.readByte());
+            action.put("encrypt", socketHelper.readString());
+            action.put("local", socketHelper.readString());
             actions.put(action);
         }
 
