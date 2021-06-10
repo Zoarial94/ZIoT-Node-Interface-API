@@ -244,7 +244,7 @@ public class TestController {
 
         for(int i = 0; i < numberOfNodes; i++) {
             JSONObject node = new JSONObject();
-            node.put("uuid", socketHelper.readUUID());
+            node.put("UUID", socketHelper.readUUID());
             node.put("hostname", socketHelper.readString());
             node.put("node_type", socketHelper.readByte());
             node.put("last_heard_from", socketHelper.readLong());
