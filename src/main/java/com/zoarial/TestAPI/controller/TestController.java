@@ -1,4 +1,4 @@
-package com.zoarial.TestAPI.web;
+package com.zoarial.TestAPI.controller;
 
 import com.zoarial.iot.models.IoTPacketSectionList;
 import com.zoarial.iot.models.actions.IoTActionList;
