@@ -1,19 +1,20 @@
 package com.zoarial.TestAPI.controller;
 
-import com.zoarial.iot.models.IoTPacketSectionList;
-import com.zoarial.iot.models.actions.IoTActionList;
+import com.zoarial.iot.network.IoTPacketSectionList;
+import lombok.extern.slf4j.Slf4j;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.json.JSONString;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import com.zoarial.iot.threads.tcp.SocketHelper;
 
-import java.awt.*;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.*;
 
+@Slf4j
 @RestController
 @RequestMapping("/api")
 public class TestController {
@@ -151,6 +152,111 @@ public class TestController {
         return response;
     }
 
+    @PostMapping("/action/{uuid}/updateInfo")
+    ResponseEntity<String> updateAction(@PathVariable("uuid") String uuidStr, @RequestParam Map<String, String> allParams) throws Exception {
+        UUID uuid = UUID.fromString(uuidStr);
+
+        System.out.println("Requested to update uuid: " + uuid);
+
+        SocketHelper socketHelper;
+        try {
+            socketHelper = new SocketHelper(new Socket("localhost", 9494));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new ResponseEntity<>("No action with UUID: " + uuid, HttpStatus.UNPROCESSABLE_ENTITY);
+        }
+        IoTPacketSectionList packetSectionList = new IoTPacketSectionList();
+
+        // Header
+        packetSectionList.add("ZIoT");
+        // Version
+        packetSectionList.add((byte)0);
+        // Session ID
+        int sessionID = (int)(Math.random() * Integer.MAX_VALUE);
+
+        System.out.println("Created SessionID: " + sessionID);
+        packetSectionList.add(sessionID);
+        packetSectionList.add("info");
+        packetSectionList.add("action");
+        packetSectionList.add(uuid);
+
+        socketHelper.out.write(packetSectionList.getNetworkResponse());
+        socketHelper.out.flush();
+
+        if(!Arrays.equals("ZIoT".getBytes(), socketHelper.in.readNBytes(4))) {
+            throw new Exception("Was not ZIoT response");
+        }
+
+        System.out.println("Session ID: " + socketHelper.readInt());
+
+        // If 0, then there was an error
+        if(socketHelper.readByte() == 0) {
+            return new ResponseEntity<>("Error: expected a success or failure.", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+
+        JSONObject json = new JSONObject(socketHelper.readJson());
+        System.out.println(json);
+
+        for(var entity : allParams.entrySet()) {
+            log.trace("Found: " + entity.getKey() + ":" + entity.getValue());
+            packetSectionList.clear();
+            // Header
+            packetSectionList.add("ZIoT");
+            // Version
+            packetSectionList.add((byte)0);
+            // Session ID
+            sessionID = (int)(Math.random() * Integer.MAX_VALUE);
+
+            System.out.println("Created SessionID: " + sessionID);
+            packetSectionList.add(sessionID);
+            packetSectionList.add("updateAction");
+            packetSectionList.add(uuid);
+            packetSectionList.add(entity.getKey());
+            switch(entity.getKey()) {
+                case "securityLevel" -> packetSectionList.add(Byte.parseByte(entity.getValue()));
+                case "encrypt", "local" -> packetSectionList.add(Boolean.parseBoolean(entity.getValue()));
+                case "desc" -> {
+                    String tmp = entity.getValue();
+                    if(tmp.isBlank()) {
+                        System.out.println("Skipping...");
+                        continue;
+                    }
+                    packetSectionList.add(entity.getValue());
+                }
+                default -> {
+                    System.out.println("I shouldn't be here!!!");
+                    continue;
+                }
+            }
+
+
+            socketHelper.out.write(packetSectionList.getNetworkResponse());
+            socketHelper.out.flush();
+
+            byte[] maybeHeader = socketHelper.in.readNBytes(4);
+            if(!Arrays.equals("ZIoT".getBytes(), maybeHeader)) {
+                throw new Exception("Was not ZIoT response");
+            }
+
+            System.out.println("Session ID: " + socketHelper.readInt());
+
+            if(!socketHelper.readString().equals("Success.")) {
+                System.out.println("Unexpected error.");
+                return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+
+        }
+
+
+        try {
+            socketHelper.close();
+        } catch (IOException ex){
+            ex.printStackTrace();
+        }
+        return new ResponseEntity<>(HttpStatus.OK);
+
+    }
+
     @GetMapping("/actions")
     String getActions() throws Exception {
         SocketHelper socketHelper;
@@ -191,8 +297,8 @@ public class TestController {
             action.put("name", socketHelper.readString());
             action.put("securityLevel", socketHelper.readByte());
             action.put("args", socketHelper.readByte());
-            action.put("encrypt", socketHelper.readString());
-            action.put("local", socketHelper.readString());
+            action.put("encrypt", socketHelper.readBoolean());
+            action.put("local", socketHelper.readBoolean());
             actions.put(action);
         }
 
